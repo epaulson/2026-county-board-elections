@@ -112,8 +112,8 @@ async function loadSupervisorDistricts() {
   currentCandidatesData = candidatesData;
   currentGeojson = geojson;
   
-  // Draw initial layers
-  drawLayers(false);
+  // Draw initial layers with shading enabled by default
+  drawLayers(true);
 }
 
 // Load and display alder districts
@@ -152,7 +152,8 @@ function drawAlderLayer() {
       color: '#FFD700', // Golden yellow
       weight: 2,
       opacity: 0.7
-    }
+    },
+    interactive: false // Allow pointer events to pass through to layers below
   });
   
   if (aldersEnabled) {
@@ -202,8 +203,8 @@ function toggleAlderLayer(show) {
     if (show) {
       if (!map.hasLayer(alderLayer)) {
         alderLayer.addTo(map);
-        // Make sure it's below supervisor layers
-        alderLayer.bringToBack();
+        // Make sure it's on top of supervisor layers
+        alderLayer.bringToFront();
       }
     } else {
       if (map.hasLayer(alderLayer)) {
@@ -284,7 +285,7 @@ function updateDistrictShading(shadeEnabled) {
 // Function to draw all layers with specified shading
 function drawLayers(shadeEnabled) {
   const fillOpacity = shadeEnabled ? 0.3 : 0.1;
-  const fillColor = shadeEnabled ? '#ADD8E6' : '#ffffff';
+  const baseFillColor = '#ffffff';
   
   // Helper function to create popup handler
   const createPopupHandler = (superid, candidatesList) => {
@@ -311,12 +312,17 @@ function drawLayers(shadeEnabled) {
       const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
       return candidateCount === 1;
     },
-    style: {
-      fillColor: fillColor,
-      fillOpacity: fillOpacity,
-      color: '#90EE90',
-      weight: 2,
-      opacity: 0.8
+    style: (feature) => {
+      const superid = feature.properties.SUPERID;
+      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const fillColor = shadeEnabled ? getDistrictColor(superid, candidateCount) : baseFillColor;
+      return {
+        fillColor: fillColor,
+        fillOpacity: fillOpacity,
+        color: '#028c0b', // Dark pine green
+        weight: 2,
+        opacity: 0.8
+      };
     },
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
@@ -332,12 +338,17 @@ function drawLayers(shadeEnabled) {
       const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
       return candidateCount > 1;
     },
-    style: {
-      fillColor: fillColor,
-      fillOpacity: fillOpacity,
-      color: '#ff0000',
-      weight: 4,
-      opacity: 0.9
+    style: (feature) => {
+      const superid = feature.properties.SUPERID;
+      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const fillColor = shadeEnabled ? getDistrictColor(superid, candidateCount) : baseFillColor;
+      return {
+        fillColor: fillColor,
+        fillOpacity: fillOpacity,
+        color: '#ff0000',
+        weight: 4,
+        opacity: 0.9
+      };
     },
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
@@ -353,12 +364,17 @@ function drawLayers(shadeEnabled) {
       const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
       return candidateCount === 0;
     },
-    style: {
-      fillColor: fillColor,
-      fillOpacity: fillOpacity,
-      color: '#666',
-      weight: 1,
-      opacity: 0.8
+    style: (feature) => {
+      const superid = feature.properties.SUPERID;
+      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const fillColor = shadeEnabled ? getDistrictColor(superid, candidateCount) : baseFillColor;
+      return {
+        fillColor: fillColor,
+        fillOpacity: fillOpacity,
+        color: '#666',
+        weight: 1,
+        opacity: 0.8
+      };
     },
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
@@ -374,12 +390,54 @@ let currentCandidatesData;
 let currentGeojson;
 let currentAldersData;
 let currentAldersGeojson;
-let aldersEnabled = true;
+let aldersEnabled = false;
+let districtColors = {}; // Store random colors for each district
+
+// Function to generate a random shade of green
+function getRandomGreen() {
+  // Generate random RGB values with green as the dominant color
+  const red = Math.floor(Math.random() * 80 + 50); // 50-130
+  const green = Math.floor(Math.random() * 100 + 155); // 155-255 (keep green dominant)
+  const blue = Math.floor(Math.random() * 80 + 50); // 50-130
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
+// Function to generate a random shade of red
+function getRandomRed() {
+  // Generate random RGB values with red as the dominant color
+  const red = Math.floor(Math.random() * 100 + 155); // 155-255 (keep red dominant)
+  const green = Math.floor(Math.random() * 80 + 50); // 50-130
+  const blue = Math.floor(Math.random() * 80 + 50); // 50-130
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
+// Function to generate a random shade of blue (for no candidates)
+function getRandomBlue() {
+  // Generate random RGB values with blue as the dominant color
+  const red = Math.floor(Math.random() * 100 + 100); // 100-200
+  const green = Math.floor(Math.random() * 100 + 100); // 100-200
+  const blue = Math.floor(Math.random() * 100 + 155); // 155-255 (keep blue dominant)
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
+// Function to get or create a color for a district
+function getDistrictColor(superid, candidateCount) {
+  if (!districtColors[superid]) {
+    if (candidateCount === 1) {
+      districtColors[superid] = getRandomGreen();
+    } else if (candidateCount > 1) {
+      districtColors[superid] = getRandomRed();
+    } else {
+      districtColors[superid] = getRandomBlue();
+    }
+  }
+  return districtColors[superid];
+}
 
 // Initialize the map
-// Load alders first so they're drawn below supervisors
-loadAlderDistricts().then(() => {
-  return loadSupervisorDistricts();
+// Load supervisors first, then alders on top
+loadSupervisorDistricts().then(() => {
+  return loadAlderDistricts();
 }).then(() => {
   // Set up checkbox handlers
   const shadeCheckbox = document.getElementById('shadeDistricts');
