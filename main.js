@@ -23,7 +23,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // Load and parse CSV data
 async function loadCandidates() {
-  const response = await fetch('/2026_dane_county_board_candidates.csv');
+  const response = await fetch('2026_dane_county_board_candidates.csv');
   const text = await response.text();
   const lines = text.trim().split('\n');
   const headers = lines[0].split(',');
@@ -62,7 +62,7 @@ async function loadCandidates() {
 
 // Load and parse alders CSV data
 async function loadAlders() {
-  const response = await fetch('/dane_county_alders.csv');
+  const response = await fetch('dane_county_alders.csv');
   const text = await response.text();
   const lines = text.trim().split('\n');
   
@@ -102,7 +102,7 @@ async function loadAlders() {
 async function loadSupervisorDistricts() {
   const [candidatesData, geoResponse] = await Promise.all([
     loadCandidates(),
-    fetch('/dane_county_supervisors.pbf')
+    fetch('dane_county_supervisors.pbf')
   ]);
   
   const buffer = await geoResponse.arrayBuffer();
@@ -120,7 +120,7 @@ async function loadSupervisorDistricts() {
 async function loadAlderDistricts() {
   const [aldersData, geoResponse] = await Promise.all([
     loadAlders(),
-    fetch('/dane_county_alder_dists.pbf')
+    fetch('dane_county_alder_dists.pbf')
   ]);
   
   const buffer = await geoResponse.arrayBuffer();
