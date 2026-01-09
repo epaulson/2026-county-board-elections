@@ -127,38 +127,61 @@ async function loadAlders() {
 
 // Load and display supervisor districts
 async function loadSupervisorDistricts() {
-  const [candidatesData, geoResponse] = await Promise.all([
-    loadCandidates(),
-    fetch('dane_county_supervisors.pbf')
-  ]);
-  
-  const buffer = await geoResponse.arrayBuffer();
-  const geojson = geobuf.decode(new Pbf(buffer));
-  
-  // Store globally for updates
-  currentCandidatesData = candidatesData;
-  currentGeojson = geojson;
-  
-  // Draw initial layers with shading enabled by default
-  drawLayers(true);
+  try {
+    console.log('Loading supervisor districts...');
+    const [candidatesData, geoResponse] = await Promise.all([
+      loadCandidates(),
+      fetch('dane_county_supervisors.pbf')
+    ]);
+    
+    console.log('Candidates data loaded:', Object.keys(candidatesData).length, 'districts');
+    console.log('Geobuf response status:', geoResponse.status);
+    
+    const buffer = await geoResponse.arrayBuffer();
+    console.log('Buffer size:', buffer.byteLength);
+    
+    const geojson = geobuf.decode(new Pbf(buffer));
+    console.log('Decoded features:', geojson.features.length);
+    
+    // Store globally for updates
+    currentCandidatesData = candidatesData;
+    currentGeojson = geojson;
+    
+    // Draw initial layers with shading enabled by default
+    drawLayers(true);
+    console.log('Supervisor districts loaded successfully');
+  } catch (error) {
+    console.error('Error loading supervisor districts:', error);
+  }
 }
 
 // Load and display alder districts
 async function loadAlderDistricts() {
-  const [aldersData, geoResponse] = await Promise.all([
-    loadAlders(),
-    fetch('dane_county_alder_dists.pbf')
-  ]);
-  
-  const buffer = await geoResponse.arrayBuffer();
-  const geojson = geobuf.decode(new Pbf(buffer));
-  
-  // Store globally
-  currentAldersData = aldersData;
-  currentAldersGeojson = geojson;
-  
-  // Draw alder layer
-  drawAlderLayer();
+  try {
+    console.log('Loading alder districts...');
+    const [aldersData, geoResponse] = await Promise.all([
+      loadAlders(),
+      fetch('dane_county_alder_dists.pbf')
+    ]);
+    
+    console.log('Alders data loaded:', Object.keys(aldersData).length, 'districts');
+    console.log('Alder geobuf response status:', geoResponse.status);
+    
+    const buffer = await geoResponse.arrayBuffer();
+    const geojson = geobuf.decode(new Pbf(buffer));
+    
+    console.log('Alder features decoded:', geojson.features.length);
+    
+    // Store globally
+    currentAldersData = aldersData;
+    currentAldersGeojson = geojson;
+    
+    // Draw alder layer
+    drawAlderLayer();
+    console.log('Alder districts loaded successfully');
+  } catch (error) {
+    console.error('Error loading alder districts:', error);
+  }
 }
 
 // Draw alder districts layer (drawn first, so it's below supervisor districts)
