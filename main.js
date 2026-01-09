@@ -251,6 +251,9 @@ function updateAlderLabelsVisibility() {
   }
 }
 
+// Store reference to current flash layer
+let currentFlashLayer = null;
+
 // Function to flash an alder district boundary when clicked
 function flashAlderDistrict(feature) {
   // Create a temporary layer for flashing
@@ -283,6 +286,34 @@ function flashAlderDistrict(feature) {
       map.removeLayer(flashLayer);
     }
   }, flashInterval);
+}
+
+// Function to flash a supervisor district boundary when clicked
+function flashSupervisorDistrict(feature, borderColor) {
+  // Remove any existing flash layer
+  if (currentFlashLayer) {
+    map.removeLayer(currentFlashLayer);
+    currentFlashLayer = null;
+  }
+  
+  // Create a temporary layer for highlighting
+  currentFlashLayer = L.geoJSON(feature, {
+    style: {
+      fillColor: 'transparent',
+      fillOpacity: 0,
+      color: borderColor,
+      weight: 6,
+      opacity: 1
+    }
+  }).addTo(map);
+}
+
+// Function to clear the supervisor district highlight
+function clearSupervisorHighlight() {
+  if (currentFlashLayer) {
+    map.removeLayer(currentFlashLayer);
+    currentFlashLayer = null;
+  }
 }
 
 // Function to update district shading
@@ -323,6 +354,9 @@ function drawLayers(shadeEnabled) {
           </div>
         `)
         .openOn(map);
+      
+      // Clear highlight when popup is closed
+      popup.on('remove', clearSupervisorHighlight);
     };
   };
   
@@ -348,7 +382,10 @@ function drawLayers(shadeEnabled) {
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
       const candidatesList = currentCandidatesData[superid] || [];
-      layer.on('click', createPopupHandler(superid, candidatesList));
+      layer.on('click', (e) => {
+        createPopupHandler(superid, candidatesList)(e);
+        flashSupervisorDistrict(feature, '#028c0b');
+      });
     }
   }).addTo(map);
   
@@ -374,7 +411,10 @@ function drawLayers(shadeEnabled) {
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
       const candidatesList = currentCandidatesData[superid] || [];
-      layer.on('click', createPopupHandler(superid, candidatesList));
+      layer.on('click', (e) => {
+        createPopupHandler(superid, candidatesList)(e);
+        flashSupervisorDistrict(feature, '#ff0000');
+      });
     }
   }).addTo(map);
   
@@ -400,7 +440,10 @@ function drawLayers(shadeEnabled) {
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
       const candidatesList = currentCandidatesData[superid] || [];
-      layer.on('click', createPopupHandler(superid, candidatesList));
+      layer.on('click', (e) => {
+        createPopupHandler(superid, candidatesList)(e);
+        flashSupervisorDistrict(feature, '#666');
+      });
     }
   }).addTo(map);
 }
