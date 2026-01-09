@@ -44,6 +44,10 @@ body {
   display: flex;
   align-items: center;
   gap: 20px;
+  min-height: 44px;
+  /* Ensure visibility on mobile */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 #controls-bar label {
@@ -53,6 +57,12 @@ body {
   cursor: pointer;
   font-size: 14px;
   color: #333;
+  /* Prevent text selection on mobile */
+  -webkit-user-select: none;
+  user-select: none;
+  /* Ensure proper touch targets on mobile */
+  min-height: 44px;
+  white-space: nowrap;
 }
 
 #controls-bar input[type="checkbox"] {
