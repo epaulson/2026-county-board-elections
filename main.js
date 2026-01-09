@@ -518,4 +518,27 @@ loadSupervisorDistricts().then(() => {
   // Set up zoom handler for alder labels
   map.on('zoomend', updateAlderLabelsVisibility);
   updateAlderLabelsVisibility(); // Initial check
+  
+  // Set up Help/About modal
+  const helpBtn = document.getElementById('helpBtn');
+  const helpModal = document.getElementById('helpModal');
+  const helpModalClose = document.getElementById('helpModalClose');
+  
+  helpBtn.onclick = (e) => {
+    e.preventDefault();
+    helpModal.style.display = 'block';
+    helpModal.classList.add('show');
+  };
+  
+  helpModalClose.onclick = () => {
+    helpModal.style.display = 'none';
+    helpModal.classList.remove('show');
+  };
+  
+  window.onclick = function(event) {
+    if (event.target === helpModal) {
+      helpModal.style.display = 'none';
+      helpModal.classList.remove('show');
+    }
+  };
 });
