@@ -67,7 +67,20 @@ async function loadCandidates() {
         }
       }
       
-      candidates[districtNum] = candidatesList;
+      // Parse presidential election data (PRETOT24, PREDEM24, PREREP24 at indices 11, 12, 13)
+      const totalVotes = parseFloat(values[11]) || 0;
+      const harrisVotes = parseFloat(values[12]) || 0;
+      const trumpVotes = parseFloat(values[13]) || 0;
+      
+      let harrisPercent = null;
+      if (totalVotes > 0) {
+        harrisPercent = Math.round((harrisVotes / totalVotes) * 100);
+      }
+      
+      candidates[districtNum] = {
+        candidates: candidatesList,
+        harrisPercent: harrisPercent
+      };
     }
   }
   
@@ -333,8 +346,11 @@ function drawLayers(shadeEnabled) {
   const baseFillColor = '#ffffff';
   
   // Helper function to create popup handler
-  const createPopupHandler = (superid, candidatesList) => {
+  const createPopupHandler = (superid, districtData) => {
     return function(e) {
+      const candidatesList = districtData.candidates || [];
+      const harrisPercent = districtData.harrisPercent;
+      
       const candidatesHTML = candidatesList.length > 0 
         ? candidatesList.map(c => {
             if (c.website) {
@@ -345,11 +361,13 @@ function drawLayers(shadeEnabled) {
           }).join('<br/>') 
         : 'No candidates listed';
       
+      const harrisPercentText = harrisPercent !== null ? ` (${harrisPercent}% Harris)` : '';
+      
       const popup = L.popup()
         .setLatLng(e.latlng)
         .setContent(`
           <div style="font-family: sans-serif;">
-            <strong>District ${parseInt(superid)}</strong><br/>
+            <strong>District ${parseInt(superid)}${harrisPercentText}</strong><br/>
             ${candidatesHTML}
           </div>
         `)
@@ -364,12 +382,14 @@ function drawLayers(shadeEnabled) {
   greenLayer = L.geoJSON(currentGeojson, {
     filter: (feature) => {
       const superid = feature.properties.SUPERID;
-      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const districtData = currentCandidatesData[superid];
+      const candidateCount = districtData ? districtData.candidates.length : 0;
       return candidateCount === 1;
     },
     style: (feature) => {
       const superid = feature.properties.SUPERID;
-      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const districtData = currentCandidatesData[superid];
+      const candidateCount = districtData ? districtData.candidates.length : 0;
       const fillColor = shadeEnabled ? getDistrictColor(superid, candidateCount) : baseFillColor;
       return {
         fillColor: fillColor,
@@ -381,9 +401,9 @@ function drawLayers(shadeEnabled) {
     },
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
-      const candidatesList = currentCandidatesData[superid] || [];
+      const districtData = currentCandidatesData[superid] || { candidates: [], harrisPercent: null };
       layer.on('click', (e) => {
-        createPopupHandler(superid, candidatesList)(e);
+        createPopupHandler(superid, districtData)(e);
         flashSupervisorDistrict(feature, '#028c0b');
       });
     }
@@ -393,12 +413,14 @@ function drawLayers(shadeEnabled) {
   redLayer = L.geoJSON(currentGeojson, {
     filter: (feature) => {
       const superid = feature.properties.SUPERID;
-      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const districtData = currentCandidatesData[superid];
+      const candidateCount = districtData ? districtData.candidates.length : 0;
       return candidateCount > 1;
     },
     style: (feature) => {
       const superid = feature.properties.SUPERID;
-      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const districtData = currentCandidatesData[superid];
+      const candidateCount = districtData ? districtData.candidates.length : 0;
       const fillColor = shadeEnabled ? getDistrictColor(superid, candidateCount) : baseFillColor;
       return {
         fillColor: fillColor,
@@ -410,9 +432,9 @@ function drawLayers(shadeEnabled) {
     },
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
-      const candidatesList = currentCandidatesData[superid] || [];
+      const districtData = currentCandidatesData[superid] || { candidates: [], harrisPercent: null };
       layer.on('click', (e) => {
-        createPopupHandler(superid, candidatesList)(e);
+        createPopupHandler(superid, districtData)(e);
         flashSupervisorDistrict(feature, '#ff0000');
       });
     }
@@ -422,12 +444,14 @@ function drawLayers(shadeEnabled) {
   defaultLayer = L.geoJSON(currentGeojson, {
     filter: (feature) => {
       const superid = feature.properties.SUPERID;
-      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const districtData = currentCandidatesData[superid];
+      const candidateCount = districtData ? districtData.candidates.length : 0;
       return candidateCount === 0;
     },
     style: (feature) => {
       const superid = feature.properties.SUPERID;
-      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      const districtData = currentCandidatesData[superid];
+      const candidateCount = districtData ? districtData.candidates.length : 0;
       const fillColor = shadeEnabled ? getDistrictColor(superid, candidateCount) : baseFillColor;
       return {
         fillColor: fillColor,
@@ -439,9 +463,9 @@ function drawLayers(shadeEnabled) {
     },
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
-      const candidatesList = currentCandidatesData[superid] || [];
+      const districtData = currentCandidatesData[superid] || { candidates: [], harrisPercent: null };
       layer.on('click', (e) => {
-        createPopupHandler(superid, candidatesList)(e);
+        createPopupHandler(superid, districtData)(e);
         flashSupervisorDistrict(feature, '#666');
       });
     }
