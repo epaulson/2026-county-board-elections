@@ -52,7 +52,21 @@ async function loadCandidates() {
     const match = office.match(/District (\d+)/);
     if (match) {
       const districtNum = match[1].padStart(2, '0'); // Pad to 2 digits like "03"
-      const candidatesList = [values[1], values[2], values[3]].filter(c => c && c !== '');
+      const candidatesList = [];
+      
+      // Process up to 3 candidates with their websites
+      for (let j = 0; j < 3; j++) {
+        const candidateName = values[1 + j];
+        const candidateWebsite = values[5 + j]; // websites are at indices 5, 6, 7
+        
+        if (candidateName && candidateName !== '') {
+          candidatesList.push({
+            name: candidateName,
+            website: candidateWebsite && candidateWebsite !== '' ? candidateWebsite : null
+          });
+        }
+      }
+      
       candidates[districtNum] = candidatesList;
     }
   }
@@ -290,15 +304,22 @@ function drawLayers(shadeEnabled) {
   // Helper function to create popup handler
   const createPopupHandler = (superid, candidatesList) => {
     return function(e) {
+      const candidatesHTML = candidatesList.length > 0 
+        ? candidatesList.map(c => {
+            if (c.website) {
+              return `• <a href="${c.website}" target="_blank" rel="noopener noreferrer">${c.name}</a>`;
+            } else {
+              return `• ${c.name}`;
+            }
+          }).join('<br/>') 
+        : 'No candidates listed';
+      
       const popup = L.popup()
         .setLatLng(e.latlng)
         .setContent(`
           <div style="font-family: sans-serif;">
             <strong>District ${parseInt(superid)}</strong><br/>
-            ${candidatesList.length > 0 ? 
-              candidatesList.map(c => `• ${c}`).join('<br/>') : 
-              'No candidates listed'
-            }
+            ${candidatesHTML}
           </div>
         `)
         .openOn(map);
@@ -327,7 +348,7 @@ function drawLayers(shadeEnabled) {
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
       const candidatesList = currentCandidatesData[superid] || [];
-      layer.on('mouseover', createPopupHandler(superid, candidatesList));
+      layer.on('click', createPopupHandler(superid, candidatesList));
     }
   }).addTo(map);
   
@@ -353,7 +374,7 @@ function drawLayers(shadeEnabled) {
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
       const candidatesList = currentCandidatesData[superid] || [];
-      layer.on('mouseover', createPopupHandler(superid, candidatesList));
+      layer.on('click', createPopupHandler(superid, candidatesList));
     }
   }).addTo(map);
   
@@ -379,7 +400,7 @@ function drawLayers(shadeEnabled) {
     onEachFeature: (feature, layer) => {
       const superid = feature.properties.SUPERID;
       const candidatesList = currentCandidatesData[superid] || [];
-      layer.on('mouseover', createPopupHandler(superid, candidatesList));
+      layer.on('click', createPopupHandler(superid, candidatesList));
     }
   }).addTo(map);
 }
