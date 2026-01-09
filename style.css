@@ -6,6 +6,7 @@
 
 :root {
   --title-bar-height: 54px;
+  --controls-bar-height: 44px;
 }
 
 body {
@@ -31,11 +32,61 @@ body {
   margin: 0;
 }
 
-#map {
+#controls-bar {
   position: fixed;
   top: var(--title-bar-height);
   left: 0;
   right: 0;
+  background-color: #f5f5f5;
+  padding: 10px 20px;
+  z-index: 999;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+#controls-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+}
+
+#controls-bar input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+#map {
+  position: fixed;
+  top: calc(var(--title-bar-height) + var(--controls-bar-height));
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 1;
+}
+
+/* SVG path styling for glowing borders */
+.leaflet-interactive {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+}
+
+.leaflet-popup-content {
+  margin: 12px;
+  line-height: 1.4;
+}
+
+/* Alder label styling */
+.alder-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }

@@ -1,5 +1,8 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import geobuf from 'geobuf';
+import Pbf from 'pbf';
+import { centroid } from '@turf/centroid';
 
 // Fix for default marker icons in Leaflet with bundlers
 delete L.Icon.Default.prototype._getIconUrl;
@@ -17,3 +20,380 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   maxZoom: 19,
 }).addTo(map);
+
+// Load and parse CSV data
+async function loadCandidates() {
+  const response = await fetch('/2026_dane_county_board_candidates.csv');
+  const text = await response.text();
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',');
+  
+  const candidates = {};
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const values = [];
+    let currentValue = '';
+    let inQuotes = false;
+    
+    for (let char of line) {
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        values.push(currentValue.trim());
+        currentValue = '';
+      } else {
+        currentValue += char;
+      }
+    }
+    values.push(currentValue.trim());
+    
+    // Extract district number from office field (e.g., "County Supervisor - District 3" -> "03")
+    const office = values[0];
+    const match = office.match(/District (\d+)/);
+    if (match) {
+      const districtNum = match[1].padStart(2, '0'); // Pad to 2 digits like "03"
+      const candidatesList = [values[1], values[2], values[3]].filter(c => c && c !== '');
+      candidates[districtNum] = candidatesList;
+    }
+  }
+  
+  return candidates;
+}
+
+// Load and parse alders CSV data
+async function loadAlders() {
+  const response = await fetch('/dane_county_alders.csv');
+  const text = await response.text();
+  const lines = text.trim().split('\n');
+  
+  const alders = {};
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const values = [];
+    let currentValue = '';
+    let inQuotes = false;
+    
+    for (let char of line) {
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        values.push(currentValue.trim());
+        currentValue = '';
+      } else {
+        currentValue += char;
+      }
+    }
+    values.push(currentValue.trim());
+    
+    // city, district, alder
+    const city = values[0];
+    const district = values[1].padStart(2, '0'); // Pad to 2 digits like "03"
+    const alder = values[2].replace(/"/g, ''); // Remove quotes
+    
+    // Create key from city + district
+    const key = `${city}-${district}`;
+    alders[key] = { city, alder };
+  }
+  
+  return alders;
+}
+
+// Load and display supervisor districts
+async function loadSupervisorDistricts() {
+  const [candidatesData, geoResponse] = await Promise.all([
+    loadCandidates(),
+    fetch('/dane_county_supervisors.pbf')
+  ]);
+  
+  const buffer = await geoResponse.arrayBuffer();
+  const geojson = geobuf.decode(new Pbf(buffer));
+  
+  // Store globally for updates
+  currentCandidatesData = candidatesData;
+  currentGeojson = geojson;
+  
+  // Draw initial layers
+  drawLayers(false);
+}
+
+// Load and display alder districts
+async function loadAlderDistricts() {
+  const [aldersData, geoResponse] = await Promise.all([
+    loadAlders(),
+    fetch('/dane_county_alder_dists.pbf')
+  ]);
+  
+  const buffer = await geoResponse.arrayBuffer();
+  const geojson = geobuf.decode(new Pbf(buffer));
+  
+  // Store globally
+  currentAldersData = aldersData;
+  currentAldersGeojson = geojson;
+  
+  // Draw alder layer
+  drawAlderLayer();
+}
+
+// Draw alder districts layer (drawn first, so it's below supervisor districts)
+function drawAlderLayer() {
+  if (alderLayer) map.removeLayer(alderLayer);
+  if (alderLabelsLayer) map.removeLayer(alderLabelsLayer);
+  
+  alderLayer = L.geoJSON(currentAldersGeojson, {
+    filter: (feature) => {
+      const alderid = feature.properties.ALDERID;
+      const muniName = feature.properties.MuniName;
+      const key = `${muniName}-${alderid}`;
+      return currentAldersData[key] !== undefined;
+    },
+    style: {
+      fillColor: 'transparent',
+      fillOpacity: 0,
+      color: '#FFD700', // Golden yellow
+      weight: 2,
+      opacity: 0.7
+    }
+  });
+  
+  if (aldersEnabled) {
+    alderLayer.addTo(map);
+  }
+  
+  // Create a layer group for labels
+  alderLabelsLayer = L.layerGroup();
+  
+  // Add labels for each alder district
+  currentAldersGeojson.features.forEach((feature) => {
+    const alderid = feature.properties.ALDERID;
+    const muniName = feature.properties.MuniName;
+    const key = `${muniName}-${alderid}`;
+    const alderInfo = currentAldersData[key];
+    
+    if (alderInfo) {
+      // Calculate centroid for label placement
+      const center = centroid(feature);
+      const coords = center.geometry.coordinates;
+      
+      // Create div icon with text
+      const labelText = `${alderInfo.city} D${parseInt(alderid)} - ${alderInfo.alder}`;
+      const icon = L.divIcon({
+        className: 'alder-label',
+        html: `<span style="color: #FFD700; font-size: 11px; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; white-space: nowrap; cursor: pointer;">${labelText}</span>`,
+        iconSize: null
+      });
+      
+      const marker = L.marker([coords[1], coords[0]], { icon: icon });
+      
+      // Add click handler to flash the district boundary
+      marker.on('click', () => {
+        flashAlderDistrict(feature);
+      });
+      
+      alderLabelsLayer.addLayer(marker);
+    }
+  });
+  
+  updateAlderLabelsVisibility();
+}
+
+// Function to toggle alder layer visibility
+function toggleAlderLayer(show) {
+  if (alderLayer) {
+    if (show) {
+      if (!map.hasLayer(alderLayer)) {
+        alderLayer.addTo(map);
+        // Make sure it's below supervisor layers
+        alderLayer.bringToBack();
+      }
+    } else {
+      if (map.hasLayer(alderLayer)) {
+        map.removeLayer(alderLayer);
+      }
+    }
+  }
+  updateAlderLabelsVisibility();
+}
+
+// Function to show/hide alder labels based on zoom level
+function updateAlderLabelsVisibility() {
+  const zoom = map.getZoom();
+  const minZoom = 13; // Only show labels when zoomed in to level 13 or closer
+  
+  if (alderLabelsLayer && aldersEnabled) {
+    if (zoom >= minZoom) {
+      if (!map.hasLayer(alderLabelsLayer)) {
+        alderLabelsLayer.addTo(map);
+      }
+    } else {
+      if (map.hasLayer(alderLabelsLayer)) {
+        map.removeLayer(alderLabelsLayer);
+      }
+    }
+  } else if (alderLabelsLayer && !aldersEnabled) {
+    if (map.hasLayer(alderLabelsLayer)) {
+      map.removeLayer(alderLabelsLayer);
+    }
+  }
+}
+
+// Function to flash an alder district boundary when clicked
+function flashAlderDistrict(feature) {
+  // Create a temporary layer for flashing
+  const flashLayer = L.geoJSON(feature, {
+    style: {
+      fillColor: 'transparent',
+      fillOpacity: 0,
+      color: '#FFD700',
+      weight: 5,
+      opacity: 1
+    }
+  }).addTo(map);
+  
+  let flashCount = 0;
+  const maxFlashes = 6; // Flash 6 times over 3 seconds
+  const flashInterval = 500; // 500ms per flash (on/off cycle)
+  
+  const interval = setInterval(() => {
+    flashCount++;
+    
+    // Toggle opacity between visible and invisible
+    const currentOpacity = flashLayer.options.opacity;
+    flashLayer.setStyle({
+      opacity: currentOpacity > 0 ? 0 : 1
+    });
+    
+    // Stop after specified number of flashes
+    if (flashCount >= maxFlashes) {
+      clearInterval(interval);
+      map.removeLayer(flashLayer);
+    }
+  }, flashInterval);
+}
+
+// Function to update district shading
+function updateDistrictShading(shadeEnabled) {
+  // Remove existing layers
+  if (greenLayer) map.removeLayer(greenLayer);
+  if (redLayer) map.removeLayer(redLayer);
+  if (defaultLayer) map.removeLayer(defaultLayer);
+  
+  // Redraw with new shading
+  drawLayers(shadeEnabled);
+}
+
+// Function to draw all layers with specified shading
+function drawLayers(shadeEnabled) {
+  const fillOpacity = shadeEnabled ? 0.3 : 0.1;
+  const fillColor = shadeEnabled ? '#ADD8E6' : '#ffffff';
+  
+  // Helper function to create popup handler
+  const createPopupHandler = (superid, candidatesList) => {
+    return function(e) {
+      const popup = L.popup()
+        .setLatLng(e.latlng)
+        .setContent(`
+          <div style="font-family: sans-serif;">
+            <strong>District ${parseInt(superid)}</strong><br/>
+            ${candidatesList.length > 0 ? 
+              candidatesList.map(c => `• ${c}`).join('<br/>') : 
+              'No candidates listed'
+            }
+          </div>
+        `)
+        .openOn(map);
+    };
+  };
+  
+  // First, draw districts with single candidate (green borders)
+  greenLayer = L.geoJSON(currentGeojson, {
+    filter: (feature) => {
+      const superid = feature.properties.SUPERID;
+      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      return candidateCount === 1;
+    },
+    style: {
+      fillColor: fillColor,
+      fillOpacity: fillOpacity,
+      color: '#90EE90',
+      weight: 2,
+      opacity: 0.8
+    },
+    onEachFeature: (feature, layer) => {
+      const superid = feature.properties.SUPERID;
+      const candidatesList = currentCandidatesData[superid] || [];
+      layer.on('mouseover', createPopupHandler(superid, candidatesList));
+    }
+  }).addTo(map);
+  
+  // Then, draw districts with multiple candidates (red borders) - these will be on top
+  redLayer = L.geoJSON(currentGeojson, {
+    filter: (feature) => {
+      const superid = feature.properties.SUPERID;
+      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      return candidateCount > 1;
+    },
+    style: {
+      fillColor: fillColor,
+      fillOpacity: fillOpacity,
+      color: '#ff0000',
+      weight: 4,
+      opacity: 0.9
+    },
+    onEachFeature: (feature, layer) => {
+      const superid = feature.properties.SUPERID;
+      const candidatesList = currentCandidatesData[superid] || [];
+      layer.on('mouseover', createPopupHandler(superid, candidatesList));
+    }
+  }).addTo(map);
+  
+  // Finally, draw districts with no candidates or zero candidates (default gray)
+  defaultLayer = L.geoJSON(currentGeojson, {
+    filter: (feature) => {
+      const superid = feature.properties.SUPERID;
+      const candidateCount = currentCandidatesData[superid] ? currentCandidatesData[superid].length : 0;
+      return candidateCount === 0;
+    },
+    style: {
+      fillColor: fillColor,
+      fillOpacity: fillOpacity,
+      color: '#666',
+      weight: 1,
+      opacity: 0.8
+    },
+    onEachFeature: (feature, layer) => {
+      const superid = feature.properties.SUPERID;
+      const candidatesList = currentCandidatesData[superid] || [];
+      layer.on('mouseover', createPopupHandler(superid, candidatesList));
+    }
+  }).addTo(map);
+}
+
+// Store layer references globally so we can update them
+let greenLayer, redLayer, defaultLayer, alderLayer, alderLabelsLayer;
+let currentCandidatesData;
+let currentGeojson;
+let currentAldersData;
+let currentAldersGeojson;
+let aldersEnabled = true;
+
+// Initialize the map
+// Load alders first so they're drawn below supervisors
+loadAlderDistricts().then(() => {
+  return loadSupervisorDistricts();
+}).then(() => {
+  // Set up checkbox handlers
+  const shadeCheckbox = document.getElementById('shadeDistricts');
+  shadeCheckbox.addEventListener('change', () => {
+    updateDistrictShading(shadeCheckbox.checked);
+  });
+  
+  const aldersCheckbox = document.getElementById('showAlders');
+  aldersCheckbox.addEventListener('change', () => {
+    aldersEnabled = aldersCheckbox.checked;
+    toggleAlderLayer(aldersEnabled);
+  });
+  
+  // Set up zoom handler for alder labels
+  map.on('zoomend', updateAlderLabelsVisibility);
+  updateAlderLabelsVisibility(); // Initial check
+});
